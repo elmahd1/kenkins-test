@@ -1,35 +1,48 @@
 pipeline {
+
     agent any
+
     stages {
+
         stage('Clone Repository') {
             steps {
                 git 'https://github.com/elmahd1/kenkins-test.git'
             }
         }
+
         stage('Install Dependencies') {
             steps {
                 sh 'pip install -r requirements.txt'
             }
         }
+
         stage('Run Tests') {
             steps {
                 sh 'pytest'
             }
         }
+
+        stage('SAST Scan') {
+            steps {
+                sh 'pip install bandit'
+                sh 'bandit -r .'
+            }
+        }
+
         stage('SCA Scan') {
             steps {
                 sh 'dependency-check.sh --project "TP-Jenkins" --scan . --format HTML'
             }
         }
-stage ('SAST Scan') {
-steps {
-sh 'sonar -scanner'
-}
-}
+
     }
+
     post {
+
         failure {
             echo 'Build failed due to errors or vulnerabilities'
         }
+
     }
+
 }
