@@ -21,6 +21,11 @@ pipeline {
                 sh 'dependency-check.sh --project "TP-Jenkins" --scan . --format HTML'
             }
         }
+stage ('SAST Scan') {
+steps {
+sh 'sonar -scanner'
+}
+}
     }
     post {
         failure {
