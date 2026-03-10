@@ -1,134 +1,37 @@
 pipeline {
     agent any
-    
-    tools {
-        python 'python3'
-    }
-    
-    environment {
-        // You'll configure these in Jenkins
-        SONAR_HOST_URL = 'http://localhost:9000'
-        SONAR_LOGIN = credentials('sonar-token')
-    }
-    
+
     stages {
-        stage('Checkout Code') {
+
+        stage('Clone Repository') {
             steps {
-                git branch: 'main', 
-                    url: 'https://github.com/elmahd1/kenkins-test.git'
+                git 'https://github.com/user/project.git'
             }
         }
-        
-        stage('Setup Python Environment') {
+
+        stage('Install Dependencies') {
             steps {
-                sh '''
-                    python3 -m venv venv
-                    . venv/bin/activate
-                    pip install --upgrade pip
-                    pip install -r requirements.txt
-                '''
+                sh 'pip install -r requirements.txt'
             }
         }
-        
-        stage('Run Unit Tests') {
+
+        stage('Run Tests') {
             steps {
-                sh '''
-                    . venv/bin/activate
-                    pytest test_app.py -v --junitxml=test-results.xml
-                '''
-            }
-            post {
-                always {
-                    junit 'test-results.xml'
-                }
+                sh 'pytest'
             }
         }
-        
-        stage('SAST Scan with SonarQube') {
+
+        stage('SCA Scan') {
             steps {
-                withSonarQubeEnv('SonarQube') {
-                    sh '''
-                        . venv/bin/activate
-                        sonar-scanner \
-                          -Dsonar.projectKey=jenkins-devsecops \
-                          -Dsonar.sources=. \
-                          -Dsonar.python.version=3 \
-                          -Dsonar.exclusions=venv/**
-                    '''
-                }
+                sh 'dependency-check.sh --project "TP-Jenkins" --scan . --format HTML'
             }
         }
-        
-        stage('SCA Scan with OWASP Dependency-Check') {
-            steps {
-                sh '''
-                    dependency-check.sh \
-                      --scan . \
-                      --format HTML \
-                      --format XML \
-                      --out dependency-check-report \
-                      --exclude venv \
-                      --project "Jenkins DevSecOps TP"
-                '''
-            }
-            post {
-                always {
-                    publishHTML([
-                        reportDir: 'dependency-check-report',
-                        reportFiles: 'dependency-check-report.html',
-                        reportName: 'OWASP Dependency Check Report'
-                    ])
-                }
-            }
-        }
-        
-        stage('Check Critical Vulnerabilities') {
-            steps {
-                script {
-                    def reportFile = 'dependency-check-report/dependency-check-report.xml'
-                    if (fileExists(reportFile)) {
-                        def report = readFile(reportFile)
-                        // Check for CVSS score >= 7.0
-                        if (report =~ 'CVSSScore="[7-9]\\.[0-9]"|CVSSScore="10\\.0"') {
-                            error "Critical vulnerabilities found (CVSS >= 7.0) - Build failed!"
-                        }
-                    }
-                }
-            }
-        }
-        
-        stage('Security Linting with Bandit') {
-            steps {
-                sh '''
-                    . venv/bin/activate
-                    pip install bandit
-                    bandit -r . -f html -o bandit-report.html || true
-                '''
-            }
-            post {
-                always {
-                    publishHTML([
-                        reportDir: '.',
-                        reportFiles: 'bandit-report.html',
-                        reportName: 'Bandit Security Report'
-                    ])
-                }
-            }
-        }
+
     }
-    
+
     post {
-        always {
-            cleanWs()
-            echo 'Pipeline completed!'
-        }
-        
-        success {
-            echo 'Pipeline succeeded! All tests passed.'
-        }
-        
         failure {
-            echo 'Pipeline failed! Check the logs.'
+            echo 'Build failed due to errors or vulnerabilities'
         }
     }
 }
